@@ -49,7 +49,7 @@ async def fetch_manga_images(manga_id):
     Fetch manga image URLs by scraping the gallery page
     
     :param manga_id: ID of the manga
-    :return: List of unique image URLs
+    :return: List of image URLs with their original page numbers
     """
     async with httpx.AsyncClient() as client:
         # Fetch the gallery page
@@ -68,8 +68,10 @@ async def fetch_manga_images(manga_id):
             # Find image elements
             image_elements = soup.select('div.thumb-container img')
             
-            # Extract unique image URLs
-            image_urls = set()
+            # Extract unique image URLs while preserving order
+            image_info = []
+            seen_urls = set()
+            
             for img in image_elements:
                 # Try to get the full image URL
                 img_src = img.get('data-src') or img.get('src')
@@ -81,10 +83,20 @@ async def fetch_manga_images(manga_id):
                     # Ensure we get the full-size image URL
                     img_src = img_src.replace('/t.', '/i.')
                     
-                    image_urls.add(img_src)
+                    # Extract page number from URL or use a default
+                    try:
+                        page_match = re.search(r'/(\d+)\.[a-z]+$', img_src)
+                        page_num = int(page_match.group(1)) if page_match else len(image_info) + 1
+                    except Exception:
+                        page_num = len(image_info) + 1
+                    
+                    # Add only if not already seen
+                    if img_src not in seen_urls:
+                        image_info.append((page_num, img_src))
+                        seen_urls.add(img_src)
             
-            # Convert back to list and sort to maintain consistent order
-            return sorted(list(image_urls))
+            # Sort by page number to ensure correct order
+            return [url for _, url in sorted(image_info, key=lambda x: x[0])]
         
         except Exception as e:
             print(f"Error fetching manga images: {e}")

@@ -49,7 +49,7 @@ async def fetch_manga_images(manga_id):
     Fetch manga image URLs by scraping the gallery page
     
     :param manga_id: ID of the manga
-    :return: List of image URLs
+    :return: List of unique image URLs
     """
     async with httpx.AsyncClient() as client:
         # Fetch the gallery page
@@ -68,8 +68,8 @@ async def fetch_manga_images(manga_id):
             # Find image elements
             image_elements = soup.select('div.thumb-container img')
             
-            # Extract image URLs
-            image_urls = []
+            # Extract unique image URLs
+            image_urls = set()
             for img in image_elements:
                 # Try to get the full image URL
                 img_src = img.get('data-src') or img.get('src')
@@ -77,9 +77,14 @@ async def fetch_manga_images(manga_id):
                     # Convert to full image URL if needed
                     if img_src.startswith('//'):
                         img_src = f"https:{img_src}"
-                    image_urls.append(img_src)
+                    
+                    # Ensure we get the full-size image URL
+                    img_src = img_src.replace('/t.', '/i.')
+                    
+                    image_urls.add(img_src)
             
-            return image_urls
+            # Convert back to list and sort to maintain consistent order
+            return sorted(list(image_urls))
         
         except Exception as e:
             print(f"Error fetching manga images: {e}")

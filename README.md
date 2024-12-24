@@ -8,7 +8,11 @@ This project is a Python-based command-line tool that allows users to download m
 
 The project consists of several key files:
 
+### simple.py  
+This file can be used to download mangas at 400*565p resolution.
+
 ### project.py
+This file can be used to download mangas at the highest resolution available.(upto 1080*2050p)
 This is the main file containing the core functionality:
 
 - `extract_manga_id(url)`: Extracts the manga ID from various URL formats using regex pattern matching. It handles different URL patterns and provides clear error messages for invalid URLs.

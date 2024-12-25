@@ -203,14 +203,66 @@ def download_manga(url):
         return None
 
 def main():
-    # Example usage
-    manga_url = input("Enter the nhentai manga URL: ").strip()
-    downloaded_path = download_manga(manga_url)
+    """
+    Read manga URLs from constants.txt and download each manga
+    """
+    # Path to the constants file
+    constants_file = 'constants.txt'
     
-    if downloaded_path:
-        print(f"Manga downloaded to: {downloaded_path}")
-    else:
-        print("Failed to download manga.")
+    # Check if the file exists
+    if not os.path.exists(constants_file):
+        print(f"Error: {constants_file} not found.")
+        return
+    
+    # Read URLs from the file
+    try:
+        with open(constants_file, 'r') as f:
+            # Read lines, strip whitespace, and filter out empty or comment lines
+            urls = [
+                url.strip() 
+                for url in f.readlines() 
+                if url.strip() and not url.strip().startswith('#')
+            ]
+    except Exception as e:
+        print(f"Error reading {constants_file}: {e}")
+        return
+    
+    # If no URLs found
+    if not urls:
+        print(f"No valid URLs found in {constants_file}")
+        return
+    
+    # Download each manga
+    successful_downloads = []
+    failed_downloads = []
+    
+    for url in urls:
+        print(f"\nProcessing URL: {url}")
+        try:
+            downloaded_path = download_manga(url)
+            
+            if downloaded_path:
+                successful_downloads.append((url, downloaded_path))
+                print(f"Successfully downloaded manga from {url}")
+            else:
+                failed_downloads.append(url)
+                print(f"Failed to download manga from {url}")
+        
+        except Exception as e:
+            failed_downloads.append(url)
+            print(f"Error processing {url}: {e}")
+    
+    # Print summary
+    print("\n--- Download Summary ---")
+    print(f"Total URLs processed: {len(urls)}")
+    print(f"Successful downloads: {len(successful_downloads)}")
+    print(f"Failed downloads: {len(failed_downloads)}")
+    
+    # Optionally, log failed downloads
+    if failed_downloads:
+        print("\nFailed URLs:")
+        for url in failed_downloads:
+            print(url)
 
 if __name__ == '__main__':
     # Configure logger to show more information

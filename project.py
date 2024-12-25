@@ -3,9 +3,15 @@ import os
 import asyncio
 import traceback
 import httpx
+import certifi
+import urllib3
 from nhentai.parser import doujinshi_parser
 from nhentai.logger import logger
 from nhentai.utils import format_filename
+from bs4 import BeautifulSoup
+
+# Suppress SSL warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def extract_manga_id(url):
     """
@@ -38,121 +44,184 @@ def safe_format_filename(name):
         return ''
     
     try:
-        # Remove any characters that are not allowed in filenames
-        sanitized_name = re.sub(r'[<>:"/\\|?*]', '', name).strip()
-        return sanitized_name[:255]  # Limit filename length
+        return format_filename(name)
     except Exception:
-        # Fallback to basic sanitization
-        return re.sub(r'[<>:"/\\|?*]', '', name).strip()[:255]
+        # If format_filename fails, do a basic sanitization
+        return re.sub(r'[<>:"/\\|?*]', '', name).strip()
 
-async def fetch_manga_images(manga_id):
+async def fetch_high_quality_images(manga_id):
     """
-    Fetch manga image URLs using multiple i-named servers and extensions
+    Fetch high-quality manga image URLs directly
     
     :param manga_id: ID of the manga
-    :return: List of image URLs
+    :return: List of high-quality image URLs
     """
-    # Get doujinshi information to get the gallery ID and total pages
-    doujinshi_info = doujinshi_parser(manga_id)
-    
-    # Extract gallery ID (preferring img_id, falling back to manga_id)
-    gallery_id = doujinshi_info.get('img_id', manga_id)
-    
-    # Possible image servers and extensions
-    image_servers = ['i1', 'i2', 'i3', 'i4']
-    possible_extensions = ['jpg', 'webp']
-    
-    # Construct image URLs
-    image_urls = []
-    
-    # Use total pages from doujinshi info or default to a safe maximum
-    total_pages = doujinshi_info.get('pages', 50)  # Default to 50 if not found
-    
-    async with httpx.AsyncClient() as client:
-        # Headers to mimic browser
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Referer': 'https://nhentai.net/'
-        }
-        
-        # Try to find image URLs for each page
-        for page_num in range(1, total_pages + 1):
-            url_found = False
+    async with httpx.AsyncClient(verify=certifi.where()) as client:
+        try:
+            # Set headers to mimic browser
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Referer': 'https://nhentai.net/'
+            }
             
-            # Try different servers and extensions
-            for server in image_servers:
-                for ext in possible_extensions:
-                    # Construct image URL
-                    img_url = f"https://{server}.nhentai.net/galleries/{gallery_id}/{page_num}.{ext}"
-                    
-                    try:
-                        # Verify the image URL
-                        response = await client.head(img_url, headers=headers)
-                        
-                        if response.status_code == 200:
-                            # Verify content type is an image
-                            content_type = response.headers.get('content-type', '')
-                            if content_type.startswith('image/'):
-                                image_urls.append(img_url)
-                                print(f"Verified image for page {page_num}: {img_url}")
-                                url_found = True
-                                break
-                    
-                    except Exception as e:
-                        print(f"Error checking {img_url}: {e}")
+            # Fetch the gallery page
+            url = f"https://nhentai.net/g/{manga_id}/"
+            response = await client.get(url, headers=headers)
+            
+            # Check if request was successful
+            if response.status_code != 200:
+                print(f"Failed to fetch gallery page. Status code: {response.status_code}")
+                return []
+            
+            # Parse the HTML
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Find all image containers
+            image_containers = soup.select('div.thumb-container')
+            
+            # Extract high-quality image URLs
+            image_urls = []
+            for container in image_containers:
+                # Try to find the image link
+                img_link = container.find('a', class_='gallerythumb')
+                if not img_link:
+                    continue
                 
-                if url_found:
-                    break
+                # Get the page URL
+                page_url = f"https://nhentai.net{img_link['href']}"
+                
+                # Fetch individual page
+                page_response = await client.get(page_url, headers=headers)
+                if page_response.status_code == 200:
+                    page_soup = BeautifulSoup(page_response.text, 'html.parser')
+                    
+                    # Find the high-resolution image
+                    img_element = page_soup.select_one('img#image')
+                    if img_element:
+                        img_src = img_element.get('src')
+                        if img_src:
+                            # Ensure full URL
+                            if img_src.startswith('//'):
+                                img_src = f"https:{img_src}"
+                            image_urls.append(img_src)
+                
+                # Prevent overwhelming the server
+                await asyncio.sleep(0.5)
             
-            # If no URL found for this page, log a warning
-            if not url_found:
-                print(f"Could not find image URL for page {page_num}")
+            print(f"Found {len(image_urls)} image URLs")
+            return image_urls
         
-        print(f"Found {len(image_urls)} image URLs")
-        return image_urls
+        except Exception as e:
+            print(f"Error fetching high-quality manga images: {e}")
+            traceback.print_exc()
+            return []
+
+async def download_image(client, img_url, filename, max_retries=3):
+    """
+    Download a single image with retry mechanism
+    
+    :param client: HTTP client
+    :param img_url: URL of the image
+    :param filename: Path to save the image
+    :param max_retries: Maximum number of retry attempts
+    :return: Boolean indicating success or failure
+    """
+    for attempt in range(max_retries):
+        try:
+            # Download image with headers to mimic browser
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Referer': 'https://nhentai.net/'
+            }
+            response = await client.get(img_url, headers=headers)
+            
+            if response.status_code == 200:
+                # Log image details
+                content_type = response.headers.get('content-type', '')
+                content_length = len(response.content)
+                print(f"Downloading {filename}: {content_type}, {content_length} bytes")
+                
+                with open(filename, 'wb') as f:
+                    f.write(response.content)
+                print(f"Downloaded: {filename}")
+                return True
+            else:
+                print(f"Attempt {attempt + 1} failed to download {img_url}. Status code: {response.status_code}")
+        
+        except Exception as e:
+            print(f"Attempt {attempt + 1} error downloading {img_url}: {e}")
+        
+        # Wait before retrying
+        await asyncio.sleep(2 ** attempt)
+    
+    print(f"Failed to download {img_url} after {max_retries} attempts")
+    return False
 
 async def download_images(manga_id, image_urls, download_folder):
     """
-    Download images for a manga
+    Download images for a manga with retry mechanism
     
     :param manga_id: ID of the manga
     :param image_urls: List of image URLs
     :param download_folder: Folder to save images
-    :return: List of downloaded file paths
+    :return: List of downloaded file paths and failed downloads
     """
     os.makedirs(download_folder, exist_ok=True)
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(verify=certifi.where()) as client:
         downloaded_files = []
+        failed_downloads = []
         
         for index, img_url in enumerate(image_urls, 1):
             try:
-                # Extract extension from the URL
+                # Determine file extension
                 ext = img_url.split('.')[-1]
+                if ext not in ['jpg', 'png', 'webp', 'gif']:
+                    ext = 'jpg'
                 
                 # Prepare filename
                 filename = os.path.join(download_folder, f"{index:03d}.{ext}")
                 
-                # Download image with headers
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Referer': 'https://nhentai.net/'
-                }
-                response = await client.get(img_url, headers=headers)
+                # Download image with retry
+                success = await download_image(client, img_url, filename)
                 
-                if response.status_code == 200:
-                    with open(filename, 'wb') as f:
-                        f.write(response.content)
-                    
+                if success:
                     downloaded_files.append(filename)
-                    print(f"Downloaded: {filename}")
                 else:
-                    print(f"Failed to download {img_url}. Status code: {response.status_code}")
+                    failed_downloads.append((index, img_url, ext))
             
             except Exception as e:
-                print(f"Error downloading image {img_url}: {e}")
+                print(f"Unexpected error processing image {img_url}: {e}")
+                failed_downloads.append((index, img_url, ext))
         
-        return downloaded_files
+        return downloaded_files, failed_downloads
+
+def retry_failed_downloads(download_folder, failed_downloads):
+    """
+    Retry downloading failed images
+    
+    :param download_folder: Folder to save images
+    :param failed_downloads: List of failed downloads
+    :return: Boolean indicating if all downloads were successful
+    """
+    if not failed_downloads:
+        return True
+    
+    print(f"\nRetrying {len(failed_downloads)} failed downloads...")
+    
+    # Use synchronous asyncio run for retry
+    async def retry_downloads():
+        async with httpx.AsyncClient(verify=certifi.where()) as client:
+            for index, img_url, ext in failed_downloads:
+                filename = os.path.join(download_folder, f"{index:03d}.{ext}")
+                success = await download_image(client, img_url, filename)
+                
+                if not success:
+                    print(f"Permanent failure: Could not download page {index}")
+                    return False
+        return True
+    
+    return asyncio.run(retry_downloads())
 
 def download_manga(url):
     """
@@ -177,17 +246,24 @@ def download_manga(url):
         
         # Create a download folder
         download_folder = name or pretty_name or str(manga_id)
-        download_folder = os.path.join(os.getcwd(), download_folder)
+        download_folder = re.sub(r'[<>:"/\\|?*]', '', download_folder).strip()
         
-        # Fetch image URLs
-        image_urls = asyncio.run(fetch_manga_images(manga_id))
+        # Fetch high-quality image URLs
+        image_urls = asyncio.run(fetch_high_quality_images(manga_id))
         
         if not image_urls:
             print("No image URLs found.")
             return None
         
         # Download images
-        downloaded_files = asyncio.run(download_images(manga_id, image_urls, download_folder))
+        downloaded_files, failed_downloads = asyncio.run(download_images(manga_id, image_urls, download_folder))
+        
+        # Retry failed downloads
+        if failed_downloads:
+            retry_success = retry_failed_downloads(download_folder, failed_downloads)
+            
+            if not retry_success:
+                print("Some images could not be downloaded after retries.")
         
         if downloaded_files:
             print(f"Successfully downloaded {len(downloaded_files)} files to: {download_folder}")
@@ -203,67 +279,18 @@ def download_manga(url):
         return None
 
 def main():
-    """
-    Read manga URLs from constants.txt and download each manga
-    """
-    # Path to the constants file
-    constants_file = 'constants.txt'
+    # Example usage
+    manga_url = input("Enter the nhentai manga URL: ").strip()
+    downloaded_path = download_manga(manga_url)
     
-    # Check if the file exists
-    if not os.path.exists(constants_file):
-        print(f"Error: {constants_file} not found.")
-        return
-    
-    # Read URLs from the file
-    try:
-        with open(constants_file, 'r') as f:
-            # Read lines, strip whitespace, and filter out empty or comment lines
-            urls = [
-                url.strip() 
-                for url in f.readlines() 
-                if url.strip() and not url.strip().startswith('#')
-            ]
-    except Exception as e:
-        print(f"Error reading {constants_file}: {e}")
-        return
-    
-    # If no URLs found
-    if not urls:
-        print(f"No valid URLs found in {constants_file}")
-        return
-    
-    # Download each manga
-    successful_downloads = []
-    failed_downloads = []
-    
-    for url in urls:
-        print(f"\nProcessing URL: {url}")
-        try:
-            downloaded_path = download_manga(url)
-            
-            if downloaded_path:
-                successful_downloads.append((url, downloaded_path))
-                print(f"Successfully downloaded manga from {url}")
-            else:
-                failed_downloads.append(url)
-                print(f"Failed to download manga from {url}")
-        
-        except Exception as e:
-            failed_downloads.append(url)
-            print(f"Error processing {url}: {e}")
-    
-    # Print summary
-    print("\n--- Download Summary ---")
-    print(f"Total URLs processed: {len(urls)}")
-    print(f"Successful downloads: {len(successful_downloads)}")
-    print(f"Failed downloads: {len(failed_downloads)}")
-    
-    # Optionally, log failed downloads
-    if failed_downloads:
-        print("\nFailed URLs:")
-        for url in failed_downloads:
-            print(url)
+    if downloaded_path:
+        print(f"Manga downloaded to: {downloaded_path}")
+    else:
+        print("Failed to download manga.")
 
 if __name__ == '__main__':
+    # Configure logger to show more information
     logger.setLevel('DEBUG')
+    
+    # Run the main function
     main()

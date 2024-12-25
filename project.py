@@ -50,7 +50,7 @@ async def fetch_manga_images(manga_id):
     Fetch manga image URLs using multiple i-named servers and extensions
     
     :param manga_id: ID of the manga
-    :return: List of image URLs
+    :return: Tuple of (List of image URLs, List of failed page numbers)
     """
     # Get doujinshi information to get the gallery ID and total pages
     doujinshi_info = doujinshi_parser(manga_id)
@@ -60,10 +60,11 @@ async def fetch_manga_images(manga_id):
     
     # Possible image servers and extensions
     image_servers = ['i1', 'i2', 'i3', 'i4']
-    possible_extensions = ['jpg', 'webp']
+    possible_extensions = ['jpg', 'webp', 'png']
     
     # Construct image URLs
     image_urls = []
+    failed_pages = []
     
     # Use total pages from doujinshi info or default to a safe maximum
     total_pages = doujinshi_info.get('pages', 50)  # Default to 50 if not found
@@ -104,12 +105,13 @@ async def fetch_manga_images(manga_id):
                 if url_found:
                     break
             
-            # If no URL found for this page, log a warning
+            # If no URL found for this page, log a warning and add to failed pages
             if not url_found:
+                failed_pages.append(page_num)
                 print(f"Could not find image URL for page {page_num}")
         
         print(f"Found {len(image_urls)} image URLs")
-        return image_urls
+        return image_urls, failed_pages
 
 async def download_images(manga_id, image_urls, download_folder):
     """
@@ -118,9 +120,10 @@ async def download_images(manga_id, image_urls, download_folder):
     :param manga_id: ID of the manga
     :param image_urls: List of image URLs
     :param download_folder: Folder to save images
-    :return: List of downloaded file paths
+    :return: Tuple of (List of downloaded file paths, List of failed page numbers)
     """
     os.makedirs(download_folder, exist_ok=True)
+    failed_pages = []
     
     async with httpx.AsyncClient() as client:
         downloaded_files = []
@@ -147,19 +150,21 @@ async def download_images(manga_id, image_urls, download_folder):
                     downloaded_files.append(filename)
                     print(f"Downloaded: {filename}")
                 else:
+                    failed_pages.append(index)
                     print(f"Failed to download {img_url}. Status code: {response.status_code}")
             
             except Exception as e:
+                failed_pages.append(index)
                 print(f"Error downloading image {img_url}: {e}")
         
-        return downloaded_files
+        return downloaded_files, failed_pages
 
 def download_manga(url):
     """
     Download a manga from an nhentai URL
     
     :param url: Full URL of the manga on nhentai
-    :return: Path to downloaded manga
+    :return: Tuple of (Path to downloaded manga, List of failed pages)
     """
     try:
         # Extract manga ID from URL
@@ -179,28 +184,36 @@ def download_manga(url):
         download_folder = name or pretty_name or str(manga_id)
         download_folder = os.path.join(os.getcwd(), download_folder)
         
-        # Fetch image URLs
-        image_urls = asyncio.run(fetch_manga_images(manga_id))
+        # Fetch image URLs and get failed pages during fetch
+        image_urls, fetch_failed_pages = asyncio.run(fetch_manga_images(manga_id))
         
         if not image_urls:
             print("No image URLs found.")
-            return None
+            # All pages failed during fetch
+            total_pages = doujinshi_info.get('pages', 0)
+            all_failed_pages = list(range(1, total_pages + 1))
+            return None, all_failed_pages
         
-        # Download images
-        downloaded_files = asyncio.run(download_images(manga_id, image_urls, download_folder))
+        # Download images and get additional failed pages during download
+        downloaded_files, download_failed_pages = asyncio.run(download_images(manga_id, image_urls, download_folder))
+        
+        # Combine all failed pages from both fetch and download phases
+        all_failed_pages = sorted(set(fetch_failed_pages + download_failed_pages))
         
         if downloaded_files:
             print(f"Successfully downloaded {len(downloaded_files)} files to: {download_folder}")
-            return download_folder
+            if all_failed_pages:
+                return download_folder, all_failed_pages
+            return download_folder, []
         else:
             print("Failed to download any images.")
-            return None
+            return None, all_failed_pages
     
     except Exception as e:
         print(f"Error downloading manga: {e}")
         print("Detailed traceback:")
         traceback.print_exc()
-        return None
+        return None, []
 
 def main():
     """
@@ -239,18 +252,25 @@ def main():
     for url in urls:
         print(f"\nProcessing URL: {url}")
         try:
-            downloaded_path = download_manga(url)
+            downloaded_path, failed_pages = download_manga(url)
             
-            if downloaded_path:
+            if downloaded_path and not failed_pages:
                 successful_downloads.append((url, downloaded_path))
                 print(f"Successfully downloaded manga from {url}")
             else:
-                failed_downloads.append(url)
+                failed_downloads.append((url, failed_pages))
                 print(f"Failed to download manga from {url}")
+                # Store failed URL and pages in store.txt
+                if failed_pages:
+                    with open('store.txt', 'a') as f:
+                        f.write(f"{url}:{','.join(map(str, failed_pages))}\n")
         
         except Exception as e:
-            failed_downloads.append(url)
+            failed_downloads.append((url, []))
             print(f"Error processing {url}: {e}")
+            # Store error in store.txt
+            with open('store.txt', 'a') as f:
+                f.write(f"{url}:error\n")
     
     # Print summary
     print("\n--- Download Summary ---")
@@ -258,15 +278,12 @@ def main():
     print(f"Successful downloads: {len(successful_downloads)}")
     print(f"Failed downloads: {len(failed_downloads)}")
     
-    # Optionally, log failed downloads
+    # Print failed URLs
     if failed_downloads:
         print("\nFailed URLs:")
-        for url in failed_downloads:
+        for url, _ in failed_downloads:
             print(url)
 
 if __name__ == '__main__':
-    # Configure logger to show more information
     logger.setLevel('DEBUG')
-    
-    # Run the main function
     main()

@@ -1,94 +1,287 @@
 # NHentai Manga Downloader
+#### installation and usage youtube link: 
 #### Description:
 
-This project is a Python-based command-line tool that allows users to download manga from NHentai. It features robust error handling, asynchronous downloads for better performance, and a clean, modular design that makes the code maintainable and testable.
+This project is a Python-based command-line tool that allows users to download manga from NHentai. It features robust error handling, asynchronous downloads for better performance, automatic PDF conversion, and a clean, modular design that makes the code maintainable and testable.
 
 ## Project Structure
 
 The project consists of several key files:
 
+### save_pdf.py
+This file handles downloading manga at high-resolution(up to 1080*2050p) and automatically converting them to PDF format. Each manga is saved in a folder named `mangaID_mangaNAME` and converted to a PDF of the same name.
+
 ### simple.py  
-This file can be used to download mangas at 400*565p resolution.
+This file provides a lightweight implementation for downloading mangas at 400*565p resolution, suitable for users who prefer smaller file sizes.
 
 ### project.py
-This file can be used to download mangas at the highest resolution available.(upto 1080*2050p)
-This is the main file containing the core functionality:
+This file offers high-resolution manga downloads (up to 1080*2050p) with advanced error handling and retry mechanisms.it saves the manga in a folder named `mangaID_mangaNAME` and keep them in image formats(jpg,png,webp,gif).
 
-- `extract_manga_id(url)`: Extracts the manga ID from various URL formats using regex pattern matching. It handles different URL patterns and provides clear error messages for invalid URLs.
-- `safe_format_filename(name)`: Sanitizes filenames by removing illegal characters and enforcing length limits. This ensures downloaded files have valid names across different operating systems.
-- `fetch_manga_images(manga_id)`: An asynchronous function that retrieves image URLs from multiple servers. It implements retry logic and server fallbacks for reliability.
-- `download_images(manga_id, image_urls, download_folder)`: Handles the actual downloading of images with proper error handling and progress reporting.
-- `download_manga(url)`: The high-level function that orchestrates the entire download process.
-- `main()`: Reads URLs from a configuration file and processes them sequentially.
+### Configuration
+- Add manga URLs to `constants.txt`, one per line
+- Supported URL formats:
+  ```
+  https://nhentai.net/g/123456/
+  https://nhentai.net/g/123456
+  123456
+  ```
 
-### test_project.py
-Contains comprehensive test cases for the core functions:
-- Tests for URL parsing with various formats
-- Tests for filename sanitization including edge cases
-- Tests for error handling in the download process
+## Installation and Usage
 
-### requirements.txt
-Lists all project dependencies with specific versions for reproducibility:
-- run on python 3.10.0
-- httpx for async HTTP requests
-- nhentai for parsing
-- beautifulsoup4 for HTML parsing
-- Other supporting libraries
+### Windows Installation
+1. Install Python 3.10.0:
+   - Download Python 3.10.0 installer from [Python Official Website](https://www.python.org/downloads/release/python-3100/)
+   - Run the installer (python-3.10.0-amd64.exe)
+   - Check "Add Python 3.10 to PATH"
+   - Choose "Customize installation"
+   - Check all Optional Features
+   - Check all Advanced Options
+   - Click Install
 
-## Design Choices
-
-1. **Asynchronous Downloads**: I chose to use async/await patterns with httpx instead of traditional synchronous downloads because:
-   - It significantly improves download speeds for multiple images
-   - Provides better resource utilization
-   - Allows for concurrent downloads while maintaining code readability
-
-2. **Modular Function Design**: Each function has a single responsibility, making the code:
-   - Easier to test
-   - More maintainable
-   - Simpler to debug and modify
-
-3. **Error Handling**: Comprehensive error handling is implemented at multiple levels:
-   - URL validation
-   - Network request failures
-   - File system operations
-   - This ensures the program fails gracefully and provides useful feedback
-
-4. **File Management**: The project includes robust file management features:
-   - Automatic creation of download directories
-   - Safe filename generation
-   - Proper file extension handling
-
-## Future Improvements
-
-Potential enhancements could include:
-- Adding a graphical user interface
-- Implementing download progress bars
-- Adding support for batch downloads from text files
-- Implementing resume functionality for interrupted downloads
-
-## How to Use
-
-1. Install dependencies for linux:
-```bash
-install python 3.10.0(use pyenv for linux) and create a virtual environment
+2. Create and activate virtual environment:
+```cmd
+# Open Command Prompt as Administrator
+cd %USERPROFILE%\Documents
 python -m venv venv_nhentai_Py3.10.0
+
+# Activate virtual environment
+venv_nhentai_Py3.10.0\Scripts\activate
+```
+
+3. Install dependencies:
+```cmd
+pip install -r requirements.txt
+```
+
+### Linux Installation
+1. Install Python 3.10.0:
+```bash
+# Install dependencies for building Python
+sudo apt-get update
+sudo apt-get install -y make build-essential libssl-dev zlib1g-dev \
+libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm \
+libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev \
+liblzma-dev python-openssl
+
+# Install pyenv
+curl https://pyenv.run | bash
+
+# Add to ~/.bashrc
+echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
+echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
+echo 'eval "$(pyenv init -)"' >> ~/.bashrc
+
+# Reload shell
+source ~/.bashrc
+
+# Install Python 3.10.0
+pyenv install 3.10.0
+cd folder_you_want_to_install_to
+pyenv local 3.10.0
+```
+
+2. Create and activate virtual environment:
+```bash
+# Create virtual environment
+python -m venv venv_nhentai_Py3.10.0
+
+# Activate virtual environment
 source venv_nhentai_Py3.10.0/bin/activate
 ```
 
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Run the program:
+
+### Usage Options
+
+1. For high-quality downloads with PDF conversion:
 ```bash
+# Linux
+python save_pdf.py
+
+# Windows
+python save_pdf.py
+```
+
+2. For high-resolution downloads (images only):
+```bash
+# Linux
+python project.py
+
+# Windows
 python project.py
 ```
 
-3. Add URLs to download in constants.txt, one per line.
+3. For faster, lower-resolution downloads:
+```bash
+# Linux
+python simple.py
+
+# Windows
+python simple.py
+```
+
+### Output Structure
+- Downloads are saved in folders named `mangaID_mangaNAME`
+- When using save_pdf.py:
+  - Images are saved in the manga folder
+  - A PDF is automatically created with the same name
+- Failed downloads are logged in store.txt
+
+
+## Detailed Implementation
+
+### save_pdf.py
+The most feature-complete implementation that combines downloading and PDF conversion:
+
+- `extract_manga_id(url)`: Extracts manga IDs from various URL formats using robust regex patterns
+- `safe_format_filename(name)`: Creates safe filenames by removing illegal characters
+- `fetch_manga_images(manga_id)`: Asynchronously retrieves image URLs from multiple servers
+- `download_images(manga_id, image_urls, download_folder)`: Downloads images with progress tracking
+- `download_manga(url)`: Orchestrates the download process and creates properly named folders
+- `convert_to_pdf(manga_folder)`: Converts downloaded images to a single PDF file
+- `main()`: Processes URLs from constants.txt and handles the entire workflow
+
+Key features:
+- Automatic folder naming in `mangaID_mangaNAME` format
+- PDF conversion after successful downloads
+- Comprehensive error handling and logging
+- Support for multiple image servers and formats
+
+### project.py
+The high-resolution downloader implementation:
+
+- Focuses on obtaining the highest quality images available
+- Uses multiple server fallbacks for reliability
+- Implements sophisticated retry logic
+- Provides detailed progress reporting
+- Handles various URL formats and edge cases
+
+Implementation details:
+- Uses asynchronous HTTP requests for better performance
+- Implements smart server selection
+- Handles network timeouts and retries
+- Provides comprehensive error reporting
+
+### simple.py
+A streamlined implementation focusing on efficiency:
+
+- Uses BeautifulSoup for HTML parsing
+- Downloads lower resolution images for faster processing
+- Simplified error handling
+- More memory-efficient implementation
+- Ideal for bulk downloads where maximum quality isn't required
+
+### test_project.py
+Comprehensive test suite ensuring code reliability:
+
+- Unit tests for URL parsing and validation
+- Tests for filename sanitization
+- Error handling verification
+- Network request mocking
+- Edge case coverage
+
+Test categories:
+1. URL Processing Tests
+   - Valid URL formats
+   - Invalid URL handling
+   - Edge cases
+2. Filename Processing Tests
+   - Character sanitization
+   - Length limitations
+   - Special character handling
+3. Download Process Tests
+   - Network error handling
+   - Invalid manga IDs
+   - Server response handling
+
+### requirements.txt
+Project dependencies with specific versions:
+
+- Python 3.10.0 (recommended)
+- httpx: Async HTTP client
+- nhentai: Parser for manga information
+- beautifulsoup4: HTML parsing
+- img2pdf: PDF conversion
+- pytest: Testing framework
+- Other supporting libraries
+
+## Design Choices
+
+1. **Asynchronous Architecture**
+   - Uses async/await for improved performance
+   - Implements concurrent downloads
+   - Maintains code readability
+   - Efficient resource utilization
+
+2. **Modular Design**
+   - Single responsibility principle
+   - Easy testing and maintenance
+   - Clear separation of concerns
+   - Simplified debugging
+
+3. **Error Handling Strategy**
+   - Multi-level error catching
+   - Graceful failure handling
+   - Detailed error reporting
+   - Recovery mechanisms
+
+4. **File Management**
+   - Structured folder naming
+   - Automatic PDF conversion
+   - Safe file operations
+   - Cross-platform compatibility
+
+
+### File Permissions
+Linux:
+```bash
+# If you encounter permission issues
+chmod +x save_pdf.py project.py simple.py
+```
+
+Windows:
+- Right-click the Python files
+- Properties → Security → Edit → Allow full control for your user
 
 ## Testing
 
-Run the tests using pytest:
+Run the test suite:
 ```bash
+# Run all tests
 pytest test_project.py -v
+
+# Run specific test categories
+pytest test_project.py -v -k "test_extract_manga_id"
+pytest test_project.py -v -k "test_safe_format_filename"
 ```
+
+## Troubleshooting
+
+1. Download Issues:
+- Check your internet connection
+- Verify the manga ID exists
+- Ensure you have write permissions in the directory
+
+2. PDF Conversion Issues:
+- Verify img2pdf is properly installed
+- Check if all images were downloaded successfully
+- Ensure sufficient disk space
+
+3. Permission Issues:
+- Run with appropriate permissions
+- Check folder access rights
+- Verify file ownership
+
+## Future Improvements
+
+Planned enhancements:
+- Graphical user interface
+- Download progress visualization
+- Batch download management
+- Download resume capability
+- Custom PDF formatting options
+- Parallel processing for multiple mangas

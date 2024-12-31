@@ -9,6 +9,7 @@ httpcore==1.0.7
 httpx==0.27.2
 idna==3.10
 iniconfig==2.0.0
+img2pdf==0.5.1
 iso8601==1.1.0
 nhentai==0.5.17
 packaging==24.2

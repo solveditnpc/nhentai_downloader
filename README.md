@@ -285,3 +285,15 @@ Planned enhancements:
 - Download resume capability
 - Custom PDF formatting options
 - Parallel processing for multiple mangas
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+The GPL-3.0 license ensures that:
+- You can freely use, modify, and distribute this software
+- Any modifications or derivative works must also be open source under GPL-3.0
+- The software comes with no warranty
+- You must include the original copyright notice and license
+
+For more information about your rights and obligations under this license, please refer to the full license text in the LICENSE file or visit <https://www.gnu.org/licenses/gpl-3.0.html>.

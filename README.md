@@ -4,6 +4,8 @@
 
 This project is a Python-based command-line tool that allows users to download manga from NHentai. It features robust error handling, asynchronous downloads for better performance, automatic PDF conversion, and a clean, modular design that makes the code maintainable and testable.
 
+![NHentai Downloader Banner](images/img1.png)
+
 ## Project Structure
 
 The project consists of several key files:

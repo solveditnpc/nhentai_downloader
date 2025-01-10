@@ -96,6 +96,51 @@ source venv_nhentai_Py3.10.0/bin/activate
 pip install -r requirements.txt
 ```
 
+### macOS Installation
+1. Install Homebrew (if not already installed):
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+2. Install pyenv using Homebrew:
+```bash
+brew update
+brew install pyenv
+
+# Add pyenv to shell
+echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.zshrc
+echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.zshrc
+echo 'eval "$(pyenv init -)"' >> ~/.zshrc
+
+# Reload shell configuration
+source ~/.zshrc
+```
+
+3. Install Python 3.10.0 using pyenv:
+```bash
+# Install Python 3.10.0
+pyenv install 3.10.0
+
+# Navigate to your project directory
+cd your_project_directory
+
+# Set local Python version
+pyenv local 3.10.0
+```
+
+4. Create and activate virtual environment:
+```bash
+# Create virtual environment
+python -m venv venv_nhentai_Py3.10.0
+
+# Activate virtual environment
+source venv_nhentai_Py3.10.0/bin/activate
+```
+
+5. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
 ### Usage Options
 
@@ -106,6 +151,9 @@ python save_pdf.py
 
 # Windows
 python save_pdf.py
+
+# macOS
+python save_pdf.py
 ```
 
 2. For high-resolution downloads (images only):
@@ -115,6 +163,9 @@ python project.py
 
 # Windows
 python project.py
+
+# macOS
+python project.py
 ```
 
 3. For faster, lower-resolution downloads:
@@ -123,6 +174,9 @@ python project.py
 python simple.py
 
 # Windows
+python simple.py
+
+# macOS
 python simple.py
 ```
 

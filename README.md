@@ -1,5 +1,5 @@
 # NHentai Manga Downloader
-#### installation and usage youtube link: 
+#### installation and usage youtube link: https://youtu.be/EounyXG_Ej8?si=2nFGnHt9DThVv5I2
 #### Description:
 
 This project is a Python-based command-line tool that allows users to download manga from NHentai. It features robust error handling, asynchronous downloads for better performance, automatic PDF conversion, and a clean, modular design that makes the code maintainable and testable.
